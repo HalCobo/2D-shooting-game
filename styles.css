@@ -73,7 +73,6 @@ canvas {
   box-shadow: 0 0 20px color-mix(in srgb, var(--accent), transparent 55%);
 }
 
-.fire-btn,
 #startButton {
   border: 0;
   background: linear-gradient(135deg, #ff7a45, #ff2f75);
@@ -89,7 +88,6 @@ canvas {
   -webkit-touch-callout: none;
 }
 
-.fire-btn:active,
 #startButton:active {
   transform: scale(0.96);
 }

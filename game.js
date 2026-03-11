@@ -8,7 +8,6 @@ const startButton = document.getElementById("startButton");
 
 const stickArea = document.getElementById("stickArea");
 const stickKnob = document.getElementById("stickKnob");
-const fireButton = document.getElementById("fireButton");
 
 const BOSS_TRIGGER_KILLS = 28;
 
@@ -23,7 +22,6 @@ const state = {
   bossSpawned: false,
   bossDefeated: false,
   joystick: { x: 0, y: 0, activeId: null },
-  firing: false,
   fireCooldown: 0,
   enemyCooldown: 0,
   hitFlashTimer: 0,
@@ -72,13 +70,14 @@ function updateHud() {
 function spawnEnemy() {
   if (state.enemies.length >= 6 || state.bossSpawned) return;
 
-  const size = 14 + Math.random() * 16;
+  const isLarge = Math.random() < 0.35;
+  const size = isLarge ? 26 + Math.random() * 6 : 14 + Math.random() * 7;
   const y = Math.random() * (canvas.height - size * 3) + size * 1.5;
   const centerX = canvas.width * (0.72 + Math.random() * 0.2);
   const centerY = y;
-  const life = 8 + Math.random() * 4;
-  const baseHp = 2 + Math.floor(state.level / 3);
-  const sizeBonusHp = Math.floor((size - 12) / 3);
+  const life = 10 + Math.random() * 4;
+  const baseHp = 2 + Math.floor(state.level / 4);
+  const sizeBonusHp = isLarge ? 2 : 0;
   const maxHp = baseHp + sizeBonusHp;
 
   state.enemies.push({
@@ -91,9 +90,11 @@ function spawnEnemy() {
     orbitPhase: Math.random() * Math.PI * 2,
     size,
     hp: maxHp,
-    fireCooldown: 0.4 + Math.random() * 0.8,
+    fireCooldown: 0.8 + Math.random() * 0.7,
     life,
     maxHp,
+    killValue: isLarge ? 2 : 1,
+    isLarge,
   });
 }
 
@@ -303,7 +304,7 @@ function update(delta) {
   state.player.y = Math.max(state.player.size, Math.min(canvas.height - state.player.size, state.player.y));
 
   state.fireCooldown -= delta;
-  if (state.firing && state.fireCooldown <= 0) {
+  if (state.fireCooldown <= 0) {
     shoot();
     state.fireCooldown = 0.14;
   }
@@ -327,7 +328,7 @@ function update(delta) {
     enemy.fireCooldown -= delta;
     if (enemy.fireCooldown <= 0) {
       shootEnemy(enemy);
-      enemy.fireCooldown = Math.max(0.5, 1.4 - state.level * 0.08) + Math.random() * 0.5;
+      enemy.fireCooldown = Math.max(0.75, 1.7 - state.level * 0.06) + Math.random() * 0.45;
     }
 
     enemy.life -= delta;
@@ -368,7 +369,7 @@ function update(delta) {
         enemy.hp -= 1;
         bullet.x = canvas.width + 999;
         if (enemy.hp <= 0) {
-          state.killsByPlayer += 1;
+          state.killsByPlayer += enemy.killValue;
           state.score += 12 + enemy.maxHp * 2;
         }
       }
@@ -582,16 +583,6 @@ window.addEventListener("pointerup", (e) => {
     state.joystick.activeId = null;
     resetJoystick();
   }
-});
-
-fireButton.addEventListener("pointerdown", (e) => {
-  e.preventDefault();
-  state.firing = true;
-});
-fireButton.addEventListener("contextmenu", (e) => e.preventDefault());
-fireButton.addEventListener("selectstart", (e) => e.preventDefault());
-window.addEventListener("pointerup", () => {
-  state.firing = false;
 });
 
 startButton.addEventListener("click", () => {
