@@ -37,6 +37,7 @@ const state = {
   enemyBullets: [],
   minions: [],
   boss: null,
+  emergencyTimer: 0,
 };
 
 function resetGame() {
@@ -57,6 +58,7 @@ function resetGame() {
   state.enemyBullets = [];
   state.minions = [];
   state.boss = null;
+  state.emergencyTimer = 0;
   state.player.x = canvas.width * 0.14;
   state.player.y = canvas.height * 0.5;
   startButton.textContent = "ゲーム開始";
@@ -83,7 +85,7 @@ function spawnEnemy() {
   const maxHp = baseHp + sizeBonusHp;
 
   state.enemies.push({
-    x: centerX,
+    x: canvas.width + size + 30,
     y: centerY,
     centerX,
     centerY,
@@ -97,15 +99,19 @@ function spawnEnemy() {
     maxHp,
     killValue: isLarge ? 2 : 1,
     isLarge,
+    entering: true,
+    entryDelay: 0.6 + Math.random() * 0.35,
   });
 }
 
 function spawnBoss() {
   state.bossSpawned = true;
   state.enemies = [];
+  state.emergencyTimer = 2.4;
   state.boss = {
-    x: canvas.width * 0.8,
+    x: canvas.width + 140,
     y: canvas.height * 0.5,
+    targetX: canvas.width * 0.83,
     vx: -45,
     vy: 60,
     size: 56,
@@ -118,6 +124,8 @@ function spawnBoss() {
     specialMode: null,
     normalPause: 0,
     pendingSpecial: null,
+    entering: true,
+    entryDelay: 1.0,
   };
 }
 
@@ -295,6 +303,20 @@ function updateBoss(delta) {
   const boss = state.boss;
   if (!boss) return;
 
+  if (boss.entering) {
+    boss.x -= 220 * delta;
+    if (boss.x <= boss.targetX) {
+      boss.x = boss.targetX;
+      boss.entering = false;
+    }
+    return;
+  }
+
+  if (boss.entryDelay > 0) {
+    boss.entryDelay -= delta;
+    return;
+  }
+
   boss.tripleShotCooldown -= delta;
   boss.specialCooldown -= delta;
   boss.normalPause = Math.max(0, boss.normalPause - delta);
@@ -333,8 +355,11 @@ function updateBoss(delta) {
   if (boss.y < boss.size || boss.y > canvas.height - boss.size) {
     boss.vy *= -1;
   }
-  if (boss.x < canvas.width * 0.62 || boss.x > canvas.width * 0.9) {
+  const minBossX = canvas.width * 0.58;
+  const maxBossX = canvas.width * 0.98 - boss.size;
+  if (boss.x < minBossX || boss.x > maxBossX) {
     boss.vx *= -1;
+    boss.x = Math.max(minBossX, Math.min(maxBossX, boss.x));
   }
 
   if (boss.normalPause <= 0 && boss.tripleShotCooldown <= 0) {
@@ -393,6 +418,7 @@ function update(delta) {
   state.level = 1 + Math.floor(state.time / 20);
   state.hitFlashTimer = Math.max(0, state.hitFlashTimer - delta);
   state.invincibleTimer = Math.max(0, state.invincibleTimer - delta);
+  state.emergencyTimer = Math.max(0, state.emergencyTimer - delta);
 
   const moveStrength = Math.hypot(state.joystick.x, state.joystick.y);
   if (moveStrength > 0.01) {
@@ -423,6 +449,20 @@ function update(delta) {
   }
 
   for (const enemy of state.enemies) {
+    if (enemy.entering) {
+      enemy.x -= 260 * delta;
+      if (enemy.x <= enemy.centerX) {
+        enemy.x = enemy.centerX;
+        enemy.entering = false;
+      }
+      continue;
+    }
+
+    if (enemy.entryDelay > 0) {
+      enemy.entryDelay -= delta;
+      continue;
+    }
+
     enemy.orbitPhase += enemy.orbitSpeed * delta;
     enemy.x = enemy.centerX + Math.cos(enemy.orbitPhase) * enemy.orbitRadius;
     enemy.y = enemy.centerY + Math.sin(enemy.orbitPhase * 1.3) * (enemy.orbitRadius * 0.65);
@@ -645,6 +685,23 @@ function drawMinion(minion) {
   ctx.fillRect(minion.x - minion.size, minion.y + minion.size + 4, (minion.hp / minion.maxHp) * minion.size * 2, 3);
 }
 
+function drawEmergencyBanner() {
+  const t = state.emergencyTimer;
+  if (t <= 0) return;
+  const blink = Math.floor(t * 10) % 2 === 0;
+  ctx.save();
+  ctx.fillStyle = blink ? "rgba(255,40,40,0.82)" : "rgba(160,0,0,0.82)";
+  ctx.fillRect(0, canvas.height * 0.42, canvas.width, 64);
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(8, canvas.height * 0.42 + 6, canvas.width - 16, 52);
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 34px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("⚠ ボス出現！ ⚠", canvas.width / 2, canvas.height * 0.42 + 43);
+  ctx.restore();
+}
+
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawStarField();
@@ -680,6 +737,8 @@ function render() {
     ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  drawEmergencyBanner();
 }
 
 function gameLoop(timestamp) {
