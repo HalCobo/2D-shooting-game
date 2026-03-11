@@ -10,6 +10,8 @@ const stickArea = document.getElementById("stickArea");
 const stickKnob = document.getElementById("stickKnob");
 const fireButton = document.getElementById("fireButton");
 
+const BOSS_TRIGGER_KILLS = 28;
+
 const state = {
   running: false,
   score: 0,
@@ -17,6 +19,9 @@ const state = {
   level: 1,
   time: 0,
   lastFrame: 0,
+  killsByPlayer: 0,
+  bossSpawned: false,
+  bossDefeated: false,
   joystick: { x: 0, y: 0, activeId: null },
   firing: false,
   fireCooldown: 0,
@@ -32,6 +37,7 @@ const state = {
   bullets: [],
   enemies: [],
   enemyBullets: [],
+  boss: null,
 };
 
 function resetGame() {
@@ -39,6 +45,10 @@ function resetGame() {
   state.hp = 5;
   state.level = 1;
   state.time = 0;
+  state.lastFrame = 0;
+  state.killsByPlayer = 0;
+  state.bossSpawned = false;
+  state.bossDefeated = false;
   state.fireCooldown = 0;
   state.enemyCooldown = 0;
   state.hitFlashTimer = 0;
@@ -46,27 +56,29 @@ function resetGame() {
   state.bullets = [];
   state.enemies = [];
   state.enemyBullets = [];
+  state.boss = null;
   state.player.x = canvas.width * 0.14;
   state.player.y = canvas.height * 0.5;
+  startButton.textContent = "ゲーム開始";
   updateHud();
 }
 
 function updateHud() {
   scoreEl.textContent = String(state.score);
   hpEl.textContent = String(state.hp);
-  levelEl.textContent = String(state.level);
+  levelEl.textContent = state.bossSpawned && !state.bossDefeated ? "BOSS" : String(state.level);
 }
 
 function spawnEnemy() {
-  if (state.enemies.length >= 6) return;
+  if (state.enemies.length >= 6 || state.bossSpawned) return;
 
   const size = 14 + Math.random() * 16;
   const y = Math.random() * (canvas.height - size * 3) + size * 1.5;
   const centerX = canvas.width * (0.72 + Math.random() * 0.2);
   const centerY = y;
   const life = 8 + Math.random() * 4;
-  const baseHp = 1 + Math.floor(state.level / 4);
-  const sizeBonusHp = Math.floor((size - 14) / 4);
+  const baseHp = 2 + Math.floor(state.level / 3);
+  const sizeBonusHp = Math.floor((size - 12) / 3);
   const maxHp = baseHp + sizeBonusHp;
 
   state.enemies.push({
@@ -85,12 +97,33 @@ function spawnEnemy() {
   });
 }
 
+function spawnBoss() {
+  state.bossSpawned = true;
+  state.enemies = [];
+  state.boss = {
+    x: canvas.width * 0.8,
+    y: canvas.height * 0.5,
+    vx: -45,
+    vy: 60,
+    size: 56,
+    hp: 180,
+    maxHp: 180,
+    tripleShotCooldown: 0.6,
+    beamCooldown: 6,
+    beamDuration: 0,
+    beamShotCooldown: 0,
+    splitCooldown: 2.5,
+  };
+}
+
 function shoot() {
   state.bullets.push({
     x: state.player.x + state.player.size + 5,
     y: state.player.y,
     vx: 540,
+    vy: 0,
     size: 4,
+    isPlayer: true,
   });
 }
 
@@ -137,6 +170,119 @@ function burstEnemy(enemy) {
   }
 }
 
+function fireBossTripleShot() {
+  if (!state.boss) return;
+  const baseAngle = Math.atan2(state.player.y - state.boss.y, state.player.x - state.boss.x);
+  const speed = 280;
+  for (const offset of [-0.25, 0, 0.25]) {
+    const angle = baseAngle + offset;
+    state.enemyBullets.push({
+      x: state.boss.x,
+      y: state.boss.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: 6,
+    });
+  }
+}
+
+function fireBossBeam() {
+  if (!state.boss) return;
+  const beamSpeed = 460;
+  state.enemyBullets.push({
+    x: state.boss.x - state.boss.size * 0.7,
+    y: state.boss.y,
+    vx: -beamSpeed,
+    vy: 0,
+    size: 6,
+  });
+}
+
+function fireBossSplitBurst() {
+  if (!state.boss) return;
+  const amount = 6;
+  const speed = 160;
+  for (let i = 0; i < amount; i++) {
+    const angle = (Math.PI * 2 * i) / amount;
+    state.enemyBullets.push({
+      x: state.boss.x,
+      y: state.boss.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: 7,
+      splitAfter: 0.7,
+      didSplit: false,
+    });
+  }
+}
+
+function splitBullet(bullet) {
+  const amount = 5;
+  const speed = 230;
+  for (let i = 0; i < amount; i++) {
+    const angle = (Math.PI * 2 * i) / amount;
+    state.enemyBullets.push({
+      x: bullet.x,
+      y: bullet.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: 4,
+    });
+  }
+}
+
+function updateBoss(delta) {
+  const boss = state.boss;
+  if (!boss) return;
+
+  boss.beamCooldown -= delta;
+  boss.tripleShotCooldown -= delta;
+  boss.splitCooldown -= delta;
+
+  if (boss.beamDuration > 0) {
+    boss.beamDuration -= delta;
+    boss.beamShotCooldown -= delta;
+    if (boss.beamShotCooldown <= 0) {
+      fireBossBeam();
+      boss.beamShotCooldown = 0.08;
+    }
+
+    if (boss.beamDuration <= 0) {
+      boss.beamCooldown = 6.5;
+      boss.vx = -50;
+      boss.vy = 55;
+    }
+  } else {
+    boss.x += boss.vx * delta;
+    boss.y += boss.vy * delta;
+
+    if (boss.y < boss.size || boss.y > canvas.height - boss.size) {
+      boss.vy *= -1;
+    }
+    if (boss.x < canvas.width * 0.62 || boss.x > canvas.width * 0.9) {
+      boss.vx *= -1;
+    }
+
+    if (boss.tripleShotCooldown <= 0) {
+      fireBossTripleShot();
+      boss.tripleShotCooldown = 0.75;
+    }
+
+    if (boss.beamCooldown <= 0) {
+      boss.beamDuration = 1.4;
+      boss.beamShotCooldown = 0;
+      boss.vx = 0;
+      boss.vy = 0;
+    }
+
+    const nearPlayer = Math.hypot(state.player.x - boss.x, state.player.y - boss.y) < 230;
+    if (nearPlayer && boss.splitCooldown <= 0) {
+      fireBossSplitBurst();
+      boss.splitCooldown = 3.2;
+    }
+  }
+}
+
 function update(delta) {
   if (!state.running) return;
 
@@ -163,13 +309,14 @@ function update(delta) {
   }
 
   state.enemyCooldown -= delta;
-  if (state.enemyCooldown <= 0) {
+  if (state.enemyCooldown <= 0 && !state.bossSpawned) {
     spawnEnemy();
     state.enemyCooldown = Math.max(0.25, 1.1 - state.level * 0.07);
   }
 
   for (const bullet of state.bullets) {
     bullet.x += bullet.vx * delta;
+    bullet.y += bullet.vy * delta;
   }
 
   for (const enemy of state.enemies) {
@@ -190,9 +337,20 @@ function update(delta) {
     }
   }
 
+  updateBoss(delta);
+
   for (const bullet of state.enemyBullets) {
     bullet.x += bullet.vx * delta;
     bullet.y += bullet.vy * delta;
+
+    if (bullet.splitAfter !== undefined && !bullet.didSplit) {
+      bullet.splitAfter -= delta;
+      if (bullet.splitAfter <= 0) {
+        splitBullet(bullet);
+        bullet.didSplit = true;
+        bullet.x = -999;
+      }
+    }
   }
 
   for (const enemy of state.enemies) {
@@ -210,7 +368,38 @@ function update(delta) {
         enemy.hp -= 1;
         bullet.x = canvas.width + 999;
         if (enemy.hp <= 0) {
-          state.score += 10 + enemy.maxHp * 2;
+          state.killsByPlayer += 1;
+          state.score += 12 + enemy.maxHp * 2;
+        }
+      }
+    }
+  }
+
+  if (!state.bossSpawned && state.killsByPlayer >= BOSS_TRIGGER_KILLS) {
+    spawnBoss();
+  }
+
+  const boss = state.boss;
+  if (boss) {
+    const hitBoss = Math.hypot(boss.x - state.player.x, boss.y - state.player.y) < boss.size + state.player.size * 0.9;
+    if (hitBoss) {
+      takePlayerDamage();
+    }
+
+    for (const bullet of state.bullets) {
+      const dx = boss.x - bullet.x;
+      const dy = boss.y - bullet.y;
+      if (Math.hypot(dx, dy) < boss.size + bullet.size) {
+        boss.hp -= 1;
+        bullet.x = canvas.width + 999;
+        if (boss.hp <= 0) {
+          state.score += 800;
+          state.bossDefeated = true;
+          state.boss = null;
+          state.running = false;
+          overlay.classList.remove("hidden");
+          startButton.textContent = "もう一度";
+          overlay.querySelector("h1").textContent = "Boss撃破！";
         }
       }
     }
@@ -225,11 +414,15 @@ function update(delta) {
     }
   }
 
-  state.bullets = state.bullets.filter((b) => b.x < canvas.width + 50);
+  state.bullets = state.bullets.filter((b) => b.x < canvas.width + 50 && b.y > -50 && b.y < canvas.height + 50);
   state.enemies = state.enemies.filter((e) => e.hp > 0);
   state.enemyBullets = state.enemyBullets.filter(
     (b) => b.x > -60 && b.x < canvas.width + 60 && b.y > -60 && b.y < canvas.height + 60,
   );
+
+  if (!state.running && state.hp <= 0) {
+    overlay.querySelector("h1").textContent = "Game Over";
+  }
 
   updateHud();
 }
@@ -274,6 +467,35 @@ function drawShip() {
   ctx.restore();
 }
 
+function drawBoss(boss) {
+  ctx.save();
+  ctx.translate(boss.x, boss.y);
+
+  ctx.fillStyle = "#9a66ff";
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI * 2 * i) / 6 - Math.PI / 2;
+    const radius = i % 2 === 0 ? boss.size : boss.size * 0.62;
+    const px = Math.cos(angle) * radius;
+    const py = Math.sin(angle) * radius;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#f4a8ff";
+  ctx.beginPath();
+  ctx.arc(0, 0, boss.size * 0.28, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = "rgba(255,255,255,0.4)";
+  ctx.fillRect(boss.x - boss.size, boss.y + boss.size + 8, boss.size * 2, 5);
+  ctx.fillStyle = "#ff5eff";
+  ctx.fillRect(boss.x - boss.size, boss.y + boss.size + 8, (boss.hp / boss.maxHp) * boss.size * 2, 5);
+}
+
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawStarField();
@@ -296,6 +518,10 @@ function render() {
     ctx.fillRect(enemy.x - enemy.size, enemy.y + enemy.size + 4, enemy.size * 2, 3);
     ctx.fillStyle = "#7dff8c";
     ctx.fillRect(enemy.x - enemy.size, enemy.y + enemy.size + 4, (enemy.hp / enemy.maxHp) * enemy.size * 2, 3);
+  }
+
+  if (state.boss) {
+    drawBoss(state.boss);
   }
 
   for (const bullet of state.enemyBullets) {
@@ -358,14 +584,18 @@ window.addEventListener("pointerup", (e) => {
   }
 });
 
-fireButton.addEventListener("pointerdown", () => {
+fireButton.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
   state.firing = true;
 });
+fireButton.addEventListener("contextmenu", (e) => e.preventDefault());
+fireButton.addEventListener("selectstart", (e) => e.preventDefault());
 window.addEventListener("pointerup", () => {
   state.firing = false;
 });
 
 startButton.addEventListener("click", () => {
+  overlay.querySelector("h1").textContent = "2D Shooting Game";
   resetGame();
   state.running = true;
   overlay.classList.add("hidden");
