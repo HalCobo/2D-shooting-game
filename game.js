@@ -21,6 +21,8 @@ const state = {
   firing: false,
   fireCooldown: 0,
   enemyCooldown: 0,
+  hitFlashTimer: 0,
+  invincibleTimer: 0,
   player: {
     x: 0,
     y: 0,
@@ -39,6 +41,8 @@ function resetGame() {
   state.time = 0;
   state.fireCooldown = 0;
   state.enemyCooldown = 0;
+  state.hitFlashTimer = 0;
+  state.invincibleTimer = 0;
   state.bullets = [];
   state.enemies = [];
   state.enemyBullets = [];
@@ -61,6 +65,9 @@ function spawnEnemy() {
   const centerX = canvas.width * (0.72 + Math.random() * 0.2);
   const centerY = y;
   const life = 8 + Math.random() * 4;
+  const baseHp = 1 + Math.floor(state.level / 4);
+  const sizeBonusHp = Math.floor((size - 14) / 4);
+  const maxHp = baseHp + sizeBonusHp;
 
   state.enemies.push({
     x: centerX,
@@ -71,10 +78,10 @@ function spawnEnemy() {
     orbitSpeed: 1.5 + Math.random() * 2,
     orbitPhase: Math.random() * Math.PI * 2,
     size,
-    hp: 1 + Math.floor(state.level / 4),
+    hp: maxHp,
     fireCooldown: 0.4 + Math.random() * 0.8,
     life,
-    maxHp: 1 + Math.floor(state.level / 4),
+    maxHp,
   });
 }
 
@@ -85,6 +92,19 @@ function shoot() {
     vx: 540,
     size: 4,
   });
+}
+
+function takePlayerDamage() {
+  if (state.invincibleTimer > 0 || !state.running) return;
+  state.hp -= 1;
+  state.hitFlashTimer = 0.8;
+  state.invincibleTimer = 1.1;
+
+  if (state.hp <= 0) {
+    state.running = false;
+    overlay.classList.remove("hidden");
+    startButton.textContent = "リトライ";
+  }
 }
 
 function shootEnemy(enemy) {
@@ -122,6 +142,8 @@ function update(delta) {
 
   state.time += delta;
   state.level = 1 + Math.floor(state.time / 20);
+  state.hitFlashTimer = Math.max(0, state.hitFlashTimer - delta);
+  state.invincibleTimer = Math.max(0, state.invincibleTimer - delta);
 
   const moveStrength = Math.hypot(state.joystick.x, state.joystick.y);
   if (moveStrength > 0.01) {
@@ -149,6 +171,7 @@ function update(delta) {
   for (const bullet of state.bullets) {
     bullet.x += bullet.vx * delta;
   }
+
   for (const enemy of state.enemies) {
     enemy.orbitPhase += enemy.orbitSpeed * delta;
     enemy.x = enemy.centerX + Math.cos(enemy.orbitPhase) * enemy.orbitRadius;
@@ -176,14 +199,10 @@ function update(delta) {
     const dx = enemy.x - state.player.x;
     const dy = enemy.y - state.player.y;
     if (Math.hypot(dx, dy) < enemy.size + state.player.size * 0.8) {
-      state.hp -= 1;
-      enemy.x = -100;
-      if (state.hp <= 0) {
-        state.running = false;
-        overlay.classList.remove("hidden");
-        startButton.textContent = "リトライ";
-      }
+      takePlayerDamage();
+      enemy.hp = 0;
     }
+
     for (const bullet of state.bullets) {
       const bx = enemy.x - bullet.x;
       const by = enemy.y - bullet.y;
@@ -191,8 +210,7 @@ function update(delta) {
         enemy.hp -= 1;
         bullet.x = canvas.width + 999;
         if (enemy.hp <= 0) {
-          enemy.x = -200;
-          state.score += 10;
+          state.score += 10 + enemy.maxHp * 2;
         }
       }
     }
@@ -202,13 +220,8 @@ function update(delta) {
     const dx = bullet.x - state.player.x;
     const dy = bullet.y - state.player.y;
     if (Math.hypot(dx, dy) < bullet.size + state.player.size * 0.7) {
-      state.hp -= 1;
+      takePlayerDamage();
       bullet.x = -999;
-      if (state.hp <= 0) {
-        state.running = false;
-        overlay.classList.remove("hidden");
-        startButton.textContent = "リトライ";
-      }
     }
   }
 
@@ -232,10 +245,12 @@ function drawStarField() {
 
 function drawShip() {
   const { x, y, size } = state.player;
+  const isFlashing = state.hitFlashTimer > 0 && Math.floor(state.hitFlashTimer * 16) % 2 === 0;
+
   ctx.save();
   ctx.translate(x, y);
 
-  ctx.fillStyle = "#4ff3ff";
+  ctx.fillStyle = isFlashing ? "#ffffff" : "#4ff3ff";
   ctx.beginPath();
   ctx.moveTo(size, 0);
   ctx.lineTo(-size * 0.7, size * 0.8);
@@ -243,10 +258,19 @@ function drawShip() {
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = "#b3f9ff";
+  ctx.fillStyle = isFlashing ? "#ff8a8a" : "#b3f9ff";
   ctx.beginPath();
   ctx.arc(-size * 0.1, 0, size * 0.28, 0, Math.PI * 2);
   ctx.fill();
+
+  if (isFlashing) {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 1.05, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
 
