@@ -110,10 +110,10 @@ function spawnBoss() {
     hp: 180,
     maxHp: 180,
     tripleShotCooldown: 0.6,
-    beamCooldown: 6,
+    specialCooldown: 4.5,
     beamDuration: 0,
     beamShotCooldown: 0,
-    splitCooldown: 2.5,
+    specialMode: null,
   };
 }
 
@@ -187,44 +187,52 @@ function fireBossTripleShot() {
   }
 }
 
-function fireBossBeam() {
+function fireBossMultiBeam() {
   if (!state.boss) return;
-  const beamSpeed = 460;
-  state.enemyBullets.push({
-    x: state.boss.x - state.boss.size * 0.7,
-    y: state.boss.y,
-    vx: -beamSpeed,
-    vy: 0,
-    size: 6,
-  });
-}
+  const beamSpeed = 490;
+  const dirs = [
+    { x: -1, y: 0 },
+    { x: -0.86, y: -0.5 },
+    { x: -0.86, y: 0.5 },
+    { x: -0.62, y: -0.78 },
+    { x: -0.62, y: 0.78 },
+  ];
 
-function fireBossSplitBurst() {
-  if (!state.boss) return;
-  const amount = 6;
-  const speed = 160;
-  for (let i = 0; i < amount; i++) {
-    const angle = (Math.PI * 2 * i) / amount;
+  for (const dir of dirs) {
     state.enemyBullets.push({
       x: state.boss.x,
       y: state.boss.y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      size: 7,
-      splitAfter: 0.7,
-      didSplit: false,
+      vx: dir.x * beamSpeed,
+      vy: dir.y * beamSpeed,
+      size: 6,
     });
   }
 }
 
-function splitBullet(bullet) {
-  const amount = 5;
-  const speed = 230;
+function fireBossPulseCore() {
+  if (!state.boss) return;
+  const toPlayer = Math.atan2(state.player.y - state.boss.y, state.player.x - state.boss.x);
+  const speed = 120;
+  state.enemyBullets.push({
+    x: state.boss.x,
+    y: state.boss.y,
+    vx: Math.cos(toPlayer) * speed,
+    vy: Math.sin(toPlayer) * speed,
+    size: 9,
+    kind: "pulseCore",
+    pulseTimer: 0.45,
+    life: 3.4,
+  });
+}
+
+function pulseCoreBurst(core) {
+  const amount = 7;
+  const speed = 220;
   for (let i = 0; i < amount; i++) {
     const angle = (Math.PI * 2 * i) / amount;
     state.enemyBullets.push({
-      x: bullet.x,
-      y: bullet.y,
+      x: core.x,
+      y: core.y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       size: 4,
@@ -236,50 +244,53 @@ function updateBoss(delta) {
   const boss = state.boss;
   if (!boss) return;
 
-  boss.beamCooldown -= delta;
   boss.tripleShotCooldown -= delta;
-  boss.splitCooldown -= delta;
+  boss.specialCooldown -= delta;
 
-  if (boss.beamDuration > 0) {
+  if (boss.specialMode === "beam") {
     boss.beamDuration -= delta;
     boss.beamShotCooldown -= delta;
+
     if (boss.beamShotCooldown <= 0) {
-      fireBossBeam();
-      boss.beamShotCooldown = 0.08;
+      fireBossMultiBeam();
+      boss.beamShotCooldown = 0.14;
     }
 
     if (boss.beamDuration <= 0) {
-      boss.beamCooldown = 6.5;
+      boss.specialMode = null;
       boss.vx = -50;
       boss.vy = 55;
+      boss.specialCooldown = 4.8;
     }
-  } else {
-    boss.x += boss.vx * delta;
-    boss.y += boss.vy * delta;
+    return;
+  }
 
-    if (boss.y < boss.size || boss.y > canvas.height - boss.size) {
-      boss.vy *= -1;
-    }
-    if (boss.x < canvas.width * 0.62 || boss.x > canvas.width * 0.9) {
-      boss.vx *= -1;
-    }
+  boss.x += boss.vx * delta;
+  boss.y += boss.vy * delta;
 
-    if (boss.tripleShotCooldown <= 0) {
-      fireBossTripleShot();
-      boss.tripleShotCooldown = 0.75;
-    }
+  if (boss.y < boss.size || boss.y > canvas.height - boss.size) {
+    boss.vy *= -1;
+  }
+  if (boss.x < canvas.width * 0.62 || boss.x > canvas.width * 0.9) {
+    boss.vx *= -1;
+  }
 
-    if (boss.beamCooldown <= 0) {
-      boss.beamDuration = 1.4;
+  if (boss.tripleShotCooldown <= 0) {
+    fireBossTripleShot();
+    boss.tripleShotCooldown = 0.78;
+  }
+
+  if (boss.specialCooldown <= 0) {
+    const special = Math.random() < 0.5 ? "beam" : "pulse";
+    if (special === "beam") {
+      boss.specialMode = "beam";
+      boss.beamDuration = 1.25;
       boss.beamShotCooldown = 0;
       boss.vx = 0;
       boss.vy = 0;
-    }
-
-    const nearPlayer = Math.hypot(state.player.x - boss.x, state.player.y - boss.y) < 230;
-    if (nearPlayer && boss.splitCooldown <= 0) {
-      fireBossSplitBurst();
-      boss.splitCooldown = 3.2;
+    } else {
+      fireBossPulseCore();
+      boss.specialCooldown = 4.8;
     }
   }
 }
@@ -344,11 +355,14 @@ function update(delta) {
     bullet.x += bullet.vx * delta;
     bullet.y += bullet.vy * delta;
 
-    if (bullet.splitAfter !== undefined && !bullet.didSplit) {
-      bullet.splitAfter -= delta;
-      if (bullet.splitAfter <= 0) {
-        splitBullet(bullet);
-        bullet.didSplit = true;
+    if (bullet.kind === "pulseCore") {
+      bullet.pulseTimer -= delta;
+      bullet.life -= delta;
+      if (bullet.pulseTimer <= 0) {
+        pulseCoreBurst(bullet);
+        bullet.pulseTimer = 0.45;
+      }
+      if (bullet.life <= 0) {
         bullet.x = -999;
       }
     }
