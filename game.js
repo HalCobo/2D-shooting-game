@@ -29,6 +29,7 @@ const state = {
   },
   bullets: [],
   enemies: [],
+  enemyBullets: [],
 };
 
 function resetGame() {
@@ -40,6 +41,7 @@ function resetGame() {
   state.enemyCooldown = 0;
   state.bullets = [];
   state.enemies = [];
+  state.enemyBullets = [];
   state.player.x = canvas.width * 0.14;
   state.player.y = canvas.height * 0.5;
   updateHud();
@@ -52,15 +54,27 @@ function updateHud() {
 }
 
 function spawnEnemy() {
-  const size = 12 + Math.random() * 18;
-  const speed = 80 + Math.random() * 120 + state.level * 18;
-  const y = Math.random() * (canvas.height - size * 2) + size;
+  if (state.enemies.length >= 6) return;
+
+  const size = 14 + Math.random() * 16;
+  const y = Math.random() * (canvas.height - size * 3) + size * 1.5;
+  const centerX = canvas.width * (0.72 + Math.random() * 0.2);
+  const centerY = y;
+  const life = 8 + Math.random() * 4;
+
   state.enemies.push({
-    x: canvas.width + size,
-    y,
-    vx: -speed,
+    x: centerX,
+    y: centerY,
+    centerX,
+    centerY,
+    orbitRadius: 20 + Math.random() * 35,
+    orbitSpeed: 1.5 + Math.random() * 2,
+    orbitPhase: Math.random() * Math.PI * 2,
     size,
     hp: 1 + Math.floor(state.level / 4),
+    fireCooldown: 0.4 + Math.random() * 0.8,
+    life,
+    maxHp: 1 + Math.floor(state.level / 4),
   });
 }
 
@@ -71,6 +85,36 @@ function shoot() {
     vx: 540,
     size: 4,
   });
+}
+
+function shootEnemy(enemy) {
+  const dx = state.player.x - enemy.x;
+  const dy = state.player.y - enemy.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const speed = 220 + state.level * 14;
+
+  state.enemyBullets.push({
+    x: enemy.x,
+    y: enemy.y,
+    vx: (dx / length) * speed,
+    vy: (dy / length) * speed,
+    size: 5,
+  });
+}
+
+function burstEnemy(enemy) {
+  const amount = 10;
+  const speed = 180 + state.level * 10;
+  for (let i = 0; i < amount; i++) {
+    const angle = (Math.PI * 2 * i) / amount;
+    state.enemyBullets.push({
+      x: enemy.x,
+      y: enemy.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: 4,
+    });
+  }
 }
 
 function update(delta) {
@@ -106,7 +150,26 @@ function update(delta) {
     bullet.x += bullet.vx * delta;
   }
   for (const enemy of state.enemies) {
-    enemy.x += enemy.vx * delta;
+    enemy.orbitPhase += enemy.orbitSpeed * delta;
+    enemy.x = enemy.centerX + Math.cos(enemy.orbitPhase) * enemy.orbitRadius;
+    enemy.y = enemy.centerY + Math.sin(enemy.orbitPhase * 1.3) * (enemy.orbitRadius * 0.65);
+
+    enemy.fireCooldown -= delta;
+    if (enemy.fireCooldown <= 0) {
+      shootEnemy(enemy);
+      enemy.fireCooldown = Math.max(0.5, 1.4 - state.level * 0.08) + Math.random() * 0.5;
+    }
+
+    enemy.life -= delta;
+    if (enemy.life <= 0 && enemy.hp > 0) {
+      burstEnemy(enemy);
+      enemy.hp = 0;
+    }
+  }
+
+  for (const bullet of state.enemyBullets) {
+    bullet.x += bullet.vx * delta;
+    bullet.y += bullet.vy * delta;
   }
 
   for (const enemy of state.enemies) {
@@ -135,8 +198,25 @@ function update(delta) {
     }
   }
 
+  for (const bullet of state.enemyBullets) {
+    const dx = bullet.x - state.player.x;
+    const dy = bullet.y - state.player.y;
+    if (Math.hypot(dx, dy) < bullet.size + state.player.size * 0.7) {
+      state.hp -= 1;
+      bullet.x = -999;
+      if (state.hp <= 0) {
+        state.running = false;
+        overlay.classList.remove("hidden");
+        startButton.textContent = "リトライ";
+      }
+    }
+  }
+
   state.bullets = state.bullets.filter((b) => b.x < canvas.width + 50);
-  state.enemies = state.enemies.filter((e) => e.x > -50 && e.hp > 0);
+  state.enemies = state.enemies.filter((e) => e.hp > 0);
+  state.enemyBullets = state.enemyBullets.filter(
+    (b) => b.x > -60 && b.x < canvas.width + 60 && b.y > -60 && b.y < canvas.height + 60,
+  );
 
   updateHud();
 }
@@ -191,7 +271,14 @@ function render() {
     ctx.fillStyle = "rgba(255,255,255,0.4)";
     ctx.fillRect(enemy.x - enemy.size, enemy.y + enemy.size + 4, enemy.size * 2, 3);
     ctx.fillStyle = "#7dff8c";
-    ctx.fillRect(enemy.x - enemy.size, enemy.y + enemy.size + 4, (enemy.hp / (1 + Math.floor(state.level / 4))) * enemy.size * 2, 3);
+    ctx.fillRect(enemy.x - enemy.size, enemy.y + enemy.size + 4, (enemy.hp / enemy.maxHp) * enemy.size * 2, 3);
+  }
+
+  for (const bullet of state.enemyBullets) {
+    ctx.fillStyle = "#ff9a30";
+    ctx.beginPath();
+    ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
