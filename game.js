@@ -126,6 +126,7 @@ function spawnBoss() {
     pendingSpecial: null,
     entering: true,
     entryDelay: 1.0,
+    healFlash: 0,
   };
 }
 
@@ -264,11 +265,37 @@ function spawnMinion(minionType) {
   const y = Math.max(80, Math.min(canvas.height - 80, boss.y + Math.sin(angle) * distance));
 
   if (minionType === "green") {
-    state.minions.push({ type: "green", x, y, size: 14, hp: 16, maxHp: 16, cooldown: 1.5 });
+    state.minions.push({
+      type: "green",
+      x,
+      y,
+      centerX: x,
+      centerY: y,
+      orbitRadius: 14 + Math.random() * 14,
+      orbitSpeed: 1.6 + Math.random() * 1.2,
+      orbitPhase: Math.random() * Math.PI * 2,
+      size: 14,
+      hp: 16,
+      maxHp: 16,
+      cooldown: 3.2,
+    });
   } else if (minionType === "orange") {
     state.minions.push({ type: "orange", x, y, size: 16, hp: 26, maxHp: 26, cooldown: 1.2 });
   } else if (minionType === "yellow") {
-    state.minions.push({ type: "yellow", x, y, size: 15, hp: 20, maxHp: 20, cooldown: 1.4 });
+    state.minions.push({
+      type: "yellow",
+      x,
+      y,
+      centerX: x,
+      centerY: y,
+      orbitRadius: 16 + Math.random() * 16,
+      orbitSpeed: 1.5 + Math.random() * 1.3,
+      orbitPhase: Math.random() * Math.PI * 2,
+      size: 15,
+      hp: 20,
+      maxHp: 20,
+      cooldown: 1.4,
+    });
   }
 }
 
@@ -352,8 +379,11 @@ function updateBoss(delta) {
   boss.x += boss.vx * delta;
   boss.y += boss.vy * delta;
 
-  if (boss.y < boss.size || boss.y > canvas.height - boss.size) {
+  const minBossY = boss.size + 6;
+  const maxBossY = canvas.height - boss.size - 6;
+  if (boss.y < minBossY || boss.y > maxBossY) {
     boss.vy *= -1;
+    boss.y = Math.max(minBossY, Math.min(maxBossY, boss.y));
   }
   const minBossX = canvas.width * 0.58;
   const maxBossX = canvas.width * 0.98 - boss.size;
@@ -378,11 +408,18 @@ function updateMinions(delta) {
   for (const minion of state.minions) {
     minion.cooldown -= delta;
 
+    if (minion.type === "green" || minion.type === "yellow") {
+      minion.orbitPhase += minion.orbitSpeed * delta;
+      minion.x = minion.centerX + Math.cos(minion.orbitPhase) * minion.orbitRadius;
+      minion.y = minion.centerY + Math.sin(minion.orbitPhase * 1.25) * (minion.orbitRadius * 0.7);
+    }
+
     if (minion.type === "green" && minion.cooldown <= 0) {
       if (boss) {
-        boss.hp = Math.min(boss.maxHp, boss.hp + 2);
+        boss.hp = Math.min(boss.maxHp, boss.hp + 5);
+        boss.healFlash = 0.55;
       }
-      minion.cooldown = 1.6;
+      minion.cooldown = 3.1;
     }
 
     if (minion.type === "orange" && minion.cooldown <= 0) {
@@ -402,11 +439,11 @@ function updateMinions(delta) {
         y: minion.y,
         vx: 0,
         vy: 0,
-        size: 5,
+        size: 7,
         kind: "delayedSeed",
         delay: 0.75,
       });
-      minion.cooldown = 1.5;
+      minion.cooldown = 1.55;
     }
   }
 }
@@ -419,6 +456,7 @@ function update(delta) {
   state.hitFlashTimer = Math.max(0, state.hitFlashTimer - delta);
   state.invincibleTimer = Math.max(0, state.invincibleTimer - delta);
   state.emergencyTimer = Math.max(0, state.emergencyTimer - delta);
+  if (state.boss) state.boss.healFlash = Math.max(0, state.boss.healFlash - delta);
 
   const moveStrength = Math.hypot(state.joystick.x, state.joystick.y);
   if (moveStrength > 0.01) {
@@ -505,11 +543,23 @@ function update(delta) {
         const dx = state.player.x - bullet.x;
         const dy = state.player.y - bullet.y;
         const len = Math.hypot(dx, dy) || 1;
-        bullet.vx = (dx / len) * 240;
-        bullet.vy = (dy / len) * 240;
-        bullet.kind = undefined;
-        bullet.size = 4;
+        bullet.vx = (dx / len) * 220;
+        bullet.vy = (dy / len) * 220;
+        bullet.kind = "yellowHoming";
+        bullet.homing = 0.6;
+        bullet.size = 6;
       }
+    }
+
+    if (bullet.kind === "yellowHoming") {
+      const dx = state.player.x - bullet.x;
+      const dy = state.player.y - bullet.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const speed = Math.hypot(bullet.vx, bullet.vy) || 220;
+      const targetVx = (dx / len) * speed;
+      const targetVy = (dy / len) * speed;
+      bullet.vx += (targetVx - bullet.vx) * Math.min(1, bullet.homing * delta);
+      bullet.vy += (targetVy - bullet.vy) * Math.min(1, bullet.homing * delta);
     }
   }
 
@@ -664,6 +714,14 @@ function drawBoss(boss) {
   ctx.beginPath();
   ctx.arc(0, 0, boss.size * 0.28, 0, Math.PI * 2);
   ctx.fill();
+
+  if (boss.healFlash > 0) {
+    ctx.strokeStyle = `rgba(120, 255, 170, ${Math.min(1, boss.healFlash + 0.2)})`;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(0, 0, boss.size * (1.05 + (0.6 - boss.healFlash) * 0.18), 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 
   ctx.fillStyle = "rgba(255,255,255,0.4)";
@@ -732,6 +790,7 @@ function render() {
   for (const bullet of state.enemyBullets) {
     if (bullet.kind === "pulseCore") ctx.fillStyle = "#ff5ec9";
     else if (bullet.kind === "delayedSeed") ctx.fillStyle = "#ffe24a";
+    else if (bullet.kind === "yellowHoming") ctx.fillStyle = "#ffd166";
     else ctx.fillStyle = "#ff9a30";
     ctx.beginPath();
     ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
