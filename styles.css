@@ -110,6 +110,31 @@ canvas {
   transform: scale(0.96);
 }
 
+
+.mode-buttons {
+  display: grid;
+  gap: 8px;
+  width: min(90vw, 360px);
+}
+
+.mode-btn {
+  border: 1px solid color-mix(in srgb, var(--accent), black 60%);
+  background: color-mix(in srgb, var(--panel), black 5%);
+  color: #fff;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.mode-btn.active {
+  background: linear-gradient(135deg, #2cb0ff, #3cffdb);
+  color: #031326;
+}
+
+body.pc-mode .controls {
+  opacity: 0.35;
+}
+
 .overlay {
   position: fixed;
   inset: 0;

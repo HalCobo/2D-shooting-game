@@ -5,6 +5,9 @@ const livesEl = document.getElementById("lives");
 const levelEl = document.getElementById("level");
 const overlay = document.getElementById("overlay");
 const startButton = document.getElementById("startButton");
+const mobileModeButton = document.getElementById("mobileModeButton");
+const pcModeButton = document.getElementById("pcModeButton");
+const controlHint = document.getElementById("controlHint");
 
 const stickArea = document.getElementById("stickArea");
 const stickKnob = document.getElementById("stickKnob");
@@ -23,6 +26,8 @@ const state = {
   bossSpawned: false,
   bossDefeated: false,
   joystick: { x: 0, y: 0, activeId: null },
+  keyboard: { left: false, right: false, up: false, down: false },
+  controlMode: null,
   fireCooldown: 0,
   enemyCooldown: 0,
   hitFlashTimer: 0,
@@ -64,6 +69,9 @@ function resetGame() {
   state.emergencyTimer = 0;
   state.clearTime = null;
   state.defeatEmergencyTimer = 0;
+  state.joystick.x = 0;
+  state.joystick.y = 0;
+  state.keyboard = { left: false, right: false, up: false, down: false };
   state.player.x = canvas.width * 0.14;
   state.player.y = canvas.height * 0.5;
   startButton.textContent = "ゲーム開始";
@@ -181,9 +189,9 @@ function fireOrangeMinionBeam(minion) {
   const length = Math.hypot(dx, dy) || 1;
   const dirX = dx / length;
   const dirY = dy / length;
-  const speed = 520;
-  for (let i = 0; i < 8; i++) {
-    const offset = i * 18;
+  const speed = 540;
+  for (let i = 0; i < 18; i++) {
+    const offset = i * 14;
     state.enemyBullets.push({
       x: minion.x + dirX * offset,
       y: minion.y + dirY * offset,
@@ -426,6 +434,21 @@ function updateBoss(delta) {
   }
 }
 
+function applyControlMode(mode) {
+  state.controlMode = mode;
+  mobileModeButton.classList.toggle("active", mode === "mobile");
+  pcModeButton.classList.toggle("active", mode === "pc");
+  document.body.classList.toggle("pc-mode", mode === "pc");
+  controlHint.textContent = mode === "pc" ? "十字キーで移動できます。" : "仮想スティックで移動します。";
+}
+
+function tryLandscapeLock() {
+  const orientation = screen.orientation;
+  if (orientation && typeof orientation.lock === "function") {
+    orientation.lock("landscape").catch(() => {});
+  }
+}
+
 function updateMinions(delta) {
   const boss = state.boss;
   for (const minion of state.minions) {
@@ -488,10 +511,14 @@ function update(delta) {
   state.emergencyTimer = Math.max(0, state.emergencyTimer - delta);
   if (state.boss) state.boss.healFlash = Math.max(0, state.boss.healFlash - delta);
 
-  const moveStrength = Math.hypot(state.joystick.x, state.joystick.y);
+  const keyboardX = (state.keyboard.right ? 1 : 0) - (state.keyboard.left ? 1 : 0);
+  const keyboardY = (state.keyboard.down ? 1 : 0) - (state.keyboard.up ? 1 : 0);
+  const inputX = state.controlMode === "pc" ? keyboardX : state.joystick.x;
+  const inputY = state.controlMode === "pc" ? keyboardY : state.joystick.y;
+  const moveStrength = Math.hypot(inputX, inputY);
   if (moveStrength > 0.01) {
-    const normalizedX = state.joystick.x / moveStrength;
-    const normalizedY = state.joystick.y / moveStrength;
+    const normalizedX = inputX / moveStrength;
+    const normalizedY = inputY / moveStrength;
     state.player.x += normalizedX * state.player.speed * delta;
     state.player.y += normalizedY * state.player.speed * delta;
   }
@@ -568,10 +595,10 @@ function update(delta) {
         const dx = state.player.x - bullet.x;
         const dy = state.player.y - bullet.y;
         const len = Math.hypot(dx, dy) || 1;
-        bullet.vx = (dx / len) * 220;
-        bullet.vy = (dy / len) * 220;
+        bullet.vx = (dx / len) * 300;
+        bullet.vy = (dy / len) * 300;
         bullet.kind = "yellowHoming";
-        bullet.homing = 0.6;
+        bullet.homing = 0.28;
         bullet.size = 6;
       }
     }
@@ -580,11 +607,14 @@ function update(delta) {
       const dx = state.player.x - bullet.x;
       const dy = state.player.y - bullet.y;
       const len = Math.hypot(dx, dy) || 1;
-      const speed = Math.hypot(bullet.vx, bullet.vy) || 220;
+      const speed = Math.hypot(bullet.vx, bullet.vy) || 300;
       const targetVx = (dx / len) * speed;
       const targetVy = (dy / len) * speed;
       bullet.vx += (targetVx - bullet.vx) * Math.min(1, bullet.homing * delta);
       bullet.vy += (targetVy - bullet.vy) * Math.min(1, bullet.homing * delta);
+      if (Math.hypot(bullet.vx, bullet.vy) < 36) {
+        bullet.x = -999;
+      }
       if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
         bullet.x = -999;
       }
@@ -910,6 +940,7 @@ function resetJoystick() {
 }
 
 stickArea.addEventListener("pointerdown", (e) => {
+  if (state.controlMode !== "mobile") return;
   e.preventDefault();
   state.joystick.activeId = e.pointerId;
   setJoystick(e.clientX, e.clientY);
@@ -918,7 +949,7 @@ stickArea.addEventListener("contextmenu", (e) => e.preventDefault());
 stickArea.addEventListener("selectstart", (e) => e.preventDefault());
 
 window.addEventListener("pointermove", (e) => {
-  if (state.joystick.activeId === e.pointerId) {
+  if (state.controlMode === "mobile" && state.joystick.activeId === e.pointerId) {
     setJoystick(e.clientX, e.clientY);
   }
 });
@@ -930,10 +961,35 @@ window.addEventListener("pointerup", (e) => {
   }
 });
 
+window.addEventListener("keydown", (e) => {
+  if (state.controlMode !== "pc") return;
+  if (e.key === "ArrowLeft") state.keyboard.left = true;
+  if (e.key === "ArrowRight") state.keyboard.right = true;
+  if (e.key === "ArrowUp") state.keyboard.up = true;
+  if (e.key === "ArrowDown") state.keyboard.down = true;
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key === "ArrowLeft") state.keyboard.left = false;
+  if (e.key === "ArrowRight") state.keyboard.right = false;
+  if (e.key === "ArrowUp") state.keyboard.up = false;
+  if (e.key === "ArrowDown") state.keyboard.down = false;
+});
+
+mobileModeButton.addEventListener("click", () => applyControlMode("mobile"));
+pcModeButton.addEventListener("click", () => applyControlMode("pc"));
+
 startButton.addEventListener("click", () => {
+  if (!state.controlMode) {
+    controlHint.textContent = "先に操作方式を選択してください。";
+    return;
+  }
   overlay.querySelector("h1").textContent = "2D Shooting Game";
   resetGame();
   state.running = true;
+  if (state.controlMode === "mobile") {
+    tryLandscapeLock();
+  }
   overlay.classList.add("hidden");
 });
 

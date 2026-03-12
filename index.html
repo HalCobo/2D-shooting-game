@@ -21,8 +21,12 @@
       </section>
       <section id="overlay" class="overlay">
         <h1>2D Shooting Game</h1>
-        <p>移動スティックで自機を操作。攻撃は常時オートで発射されます。</p>
-        <p>画面を横向きにすると遊びやすいです。</p>
+        <p id="controlHint">開始前に操作方式を選択してください。</p>
+        <p>スマホ/タブレットは横向きプレイ推奨です。</p>
+        <div class="mode-buttons">
+          <button id="mobileModeButton" class="mode-btn">スマホ/タブレット操作</button>
+          <button id="pcModeButton" class="mode-btn">PC操作（十字キー）</button>
+        </div>
         <button id="startButton">ゲーム開始</button>
       </section>
     </main>
