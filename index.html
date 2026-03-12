@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+    <title>Touch 2D Shooting</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hud">
+        <div>Score: <span id="score">0</span></div>
+        <div>Level: <span id="level">1</span></div>
+      </header>
+      <canvas id="game" width="900" height="600" aria-label="2D shooting game canvas"></canvas>
+      <div class="lives" aria-label="残機"><span id="lives" class="lives-hearts">❤️❤️❤️❤️❤️</span></div>
+      <section class="controls" aria-label="Touch controls">
+        <div id="stickArea" class="stick-area" role="presentation">
+          <div id="stickKnob" class="stick-knob"></div>
+        </div>
+      </section>
+      <section id="overlay" class="overlay">
+        <h1>2D Shooting Game</h1>
+        <p>移動スティックで自機を操作。攻撃は常時オートで発射されます。</p>
+        <p>画面を横向きにすると遊びやすいです。</p>
+        <button id="startButton">ゲーム開始</button>
+      </section>
+    </main>
+    <script src="game.js"></script>
+  </body>
+</html>
