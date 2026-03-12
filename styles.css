@@ -48,6 +48,22 @@ canvas {
   border: 2px solid color-mix(in srgb, var(--accent), black 55%);
 }
 
+
+.lives {
+  margin-top: -2px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent), black 70%);
+  background: color-mix(in srgb, var(--panel), black 10%);
+  text-align: center;
+}
+
+.lives-hearts {
+  letter-spacing: 0.2em;
+  font-size: clamp(1.2rem, 4vw, 1.6rem);
+  filter: drop-shadow(0 0 6px rgba(255, 80, 120, 0.55));
+}
+
 .controls {
   display: flex;
   justify-content: space-between;

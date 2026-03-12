@@ -1,7 +1,7 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const scoreEl = document.getElementById("score");
-const hpEl = document.getElementById("hp");
+const livesEl = document.getElementById("lives");
 const levelEl = document.getElementById("level");
 const overlay = document.getElementById("overlay");
 const startButton = document.getElementById("startButton");
@@ -10,11 +10,12 @@ const stickArea = document.getElementById("stickArea");
 const stickKnob = document.getElementById("stickKnob");
 
 const BOSS_TRIGGER_KILLS = 28;
+const MAX_HP = 5;
 
 const state = {
   running: false,
   score: 0,
-  hp: 5,
+  hp: MAX_HP,
   level: 1,
   time: 0,
   lastFrame: 0,
@@ -44,7 +45,7 @@ const state = {
 
 function resetGame() {
   state.score = 0;
-  state.hp = 5;
+  state.hp = MAX_HP;
   state.level = 1;
   state.time = 0;
   state.lastFrame = 0;
@@ -71,7 +72,9 @@ function resetGame() {
 
 function updateHud() {
   scoreEl.textContent = String(state.score);
-  hpEl.textContent = String(state.hp);
+  const full = "❤️".repeat(Math.max(0, state.hp));
+  const empty = "🖤".repeat(Math.max(0, MAX_HP - state.hp));
+  livesEl.textContent = full + empty;
   levelEl.textContent = state.bossSpawned && !state.bossDefeated ? "BOSS" : String(state.level);
 }
 
