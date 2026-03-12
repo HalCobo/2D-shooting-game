@@ -25,3 +25,17 @@
 python3 -m http.server 8000
 # http://localhost:8000 にアクセス
 ```
+
+
+## 公開URLでプレイする（ネットワーク非共有端末向け）
+
+同じLANにいない端末でも遊べるように、GitHub Pages で公開できます。
+
+1. このリポジトリを GitHub に push
+2. リポジトリの **Settings > Pages** で Source を **GitHub Actions** に設定
+3. `deploy-pages.yml` ワークフローが成功すると公開URLが発行される
+   - 例: `https://<GitHubユーザー名>.github.io/<リポジトリ名>/`
+4. そのURLを共有すれば、ネットワークを共有していないスマホ/タブレットでもプレイ可能
+
+> 補足: このリポジトリには `.github/workflows/deploy-pages.yml` を同梱しているため、
+> push 後に自動で静的ファイルが Pages へデプロイされます。
