@@ -1,0 +1,118 @@
+:root {
+  color-scheme: dark;
+  --bg: #06142e;
+  --panel: #0b1e3f;
+  --accent: #4ff3ff;
+  --danger: #ff5f7a;
+}
+
+* {
+  box-sizing: border-box;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: radial-gradient(circle at 30% 20%, #123b7a, var(--bg));
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #fff;
+}
+
+.app {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.hud {
+  display: flex;
+  justify-content: space-between;
+  background: color-mix(in srgb, var(--panel), black 10%);
+  border: 1px solid color-mix(in srgb, var(--accent), black 70%);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+}
+
+canvas {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: linear-gradient(#041226, #091f44);
+  border-radius: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent), black 55%);
+}
+
+.controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.stick-area {
+  width: min(36vw, 180px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent), black 55%);
+  background: color-mix(in srgb, var(--panel), black 10%);
+  position: relative;
+}
+
+.stick-knob {
+  width: 42%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent), white 15%);
+  position: absolute;
+  left: 29%;
+  top: 29%;
+  box-shadow: 0 0 20px color-mix(in srgb, var(--accent), transparent 55%);
+}
+
+#startButton {
+  border: 0;
+  background: linear-gradient(135deg, #ff7a45, #ff2f75);
+  color: #fff;
+  font-size: clamp(1rem, 3.8vw, 1.4rem);
+  padding: 16px 24px;
+  border-radius: 999px;
+  min-width: min(36vw, 190px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#startButton:active {
+  transform: scale(0.96);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, #000, transparent 18%);
+  display: grid;
+  place-content: center;
+  place-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 20px;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .controls {
+    max-width: 70%;
+    margin: 0 auto;
+  }
+}
