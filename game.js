@@ -168,7 +168,7 @@ function shoot() {
 }
 
 
-function getClosestTarget() {
+function getSkillTargets(limit = 3) {
   const candidates = [];
   for (const enemy of state.enemies) {
     if (enemy.hp > 0) candidates.push(enemy);
@@ -177,28 +177,25 @@ function getClosestTarget() {
     if (minion.hp > 0) candidates.push(minion);
   }
   if (state.boss && state.boss.hp > 0) candidates.push(state.boss);
-  if (candidates.length === 0) return null;
 
-  let nearest = candidates[0];
-  let best = Math.hypot(nearest.x - state.player.x, nearest.y - state.player.y);
-  for (let i = 1; i < candidates.length; i++) {
-    const c = candidates[i];
-    const d = Math.hypot(c.x - state.player.x, c.y - state.player.y);
-    if (d < best) {
-      best = d;
-      nearest = c;
-    }
-  }
-  return nearest;
+  return candidates
+    .sort(
+      (a, b) =>
+        Math.hypot(a.x - state.player.x, a.y - state.player.y) -
+        Math.hypot(b.x - state.player.x, b.y - state.player.y),
+    )
+    .slice(0, limit);
 }
 
 function triggerSkill() {
   if (!state.running || state.skillCooldown > 0) return;
-  const target = getClosestTarget();
-  if (!target) return;
+  const targets = getSkillTargets(3);
+  if (targets.length === 0) return;
 
-  for (let i = 0; i < 3; i++) {
-    const spread = (i - 1) * 6;
+  const count = targets.length;
+  for (let i = 0; i < count; i++) {
+    const target = targets[i];
+    const spread = (i - (count - 1) / 2) * 8;
     state.missiles.push({
       x: state.player.x + state.player.size + 6,
       y: state.player.y + spread,
@@ -588,7 +585,7 @@ function update(delta) {
   state.skillCooldown = Math.max(0, state.skillCooldown - delta);
   if (state.fireCooldown <= 0) {
     shoot();
-    state.fireCooldown = 0.14;
+    state.fireCooldown = 0.18;
   }
 
   state.enemyCooldown -= delta;
