@@ -131,8 +131,37 @@ canvas {
   color: #031326;
 }
 
-body.pc-mode .controls {
+body.pc-mode .stick-area {
   opacity: 0.35;
+}
+
+.skill-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.skill-button {
+  border: 1px solid color-mix(in srgb, #fff, transparent 40%);
+  background: linear-gradient(135deg, #784bff, #19d8ff);
+  color: #fff;
+  border-radius: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  min-width: min(28vw, 130px);
+  padding: 12px 10px;
+  box-shadow: 0 0 16px rgba(80, 180, 255, 0.45);
+}
+
+.skill-button.cooldown {
+  filter: grayscale(0.35);
+  opacity: 0.7;
+}
+
+.skill-cooldown {
+  font-size: 0.8rem;
+  color: #d5efff;
+  min-height: 1.2em;
 }
 
 .overlay {

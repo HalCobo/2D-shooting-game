@@ -8,12 +8,16 @@ const startButton = document.getElementById("startButton");
 const mobileModeButton = document.getElementById("mobileModeButton");
 const pcModeButton = document.getElementById("pcModeButton");
 const controlHint = document.getElementById("controlHint");
+const skillButton = document.getElementById("skillButton");
+const skillCooldownEl = document.getElementById("skillCooldown");
 
 const stickArea = document.getElementById("stickArea");
 const stickKnob = document.getElementById("stickKnob");
 
 const BOSS_TRIGGER_KILLS = 28;
 const MAX_HP = 5;
+const SKILL_COOLDOWN = 8;
+const MISSILE_SPEED = 320;
 
 const state = {
   running: false,
@@ -29,6 +33,7 @@ const state = {
   keyboard: { left: false, right: false, up: false, down: false },
   controlMode: null,
   fireCooldown: 0,
+  skillCooldown: 0,
   enemyCooldown: 0,
   hitFlashTimer: 0,
   invincibleTimer: 0,
@@ -39,6 +44,7 @@ const state = {
     speed: 320,
   },
   bullets: [],
+  missiles: [],
   enemies: [],
   enemyBullets: [],
   minions: [],
@@ -58,10 +64,12 @@ function resetGame() {
   state.bossSpawned = false;
   state.bossDefeated = false;
   state.fireCooldown = 0;
+  state.skillCooldown = 0;
   state.enemyCooldown = 0;
   state.hitFlashTimer = 0;
   state.invincibleTimer = 0;
   state.bullets = [];
+  state.missiles = [];
   state.enemies = [];
   state.enemyBullets = [];
   state.minions = [];
@@ -84,6 +92,10 @@ function updateHud() {
   const empty = "🖤".repeat(Math.max(0, MAX_HP - state.hp));
   livesEl.textContent = full + empty;
   levelEl.textContent = state.bossSpawned && !state.bossDefeated ? "BOSS" : String(state.level);
+  const ready = state.skillCooldown <= 0;
+  skillButton.disabled = !ready || !state.running;
+  skillButton.classList.toggle("cooldown", !ready || !state.running);
+  skillCooldownEl.textContent = ready ? "READY" : `CD ${state.skillCooldown.toFixed(1)}s`;
 }
 
 function spawnEnemy() {
@@ -153,6 +165,52 @@ function shoot() {
     vy: 0,
     size: 4,
   });
+}
+
+
+function getClosestTarget() {
+  const candidates = [];
+  for (const enemy of state.enemies) {
+    if (enemy.hp > 0) candidates.push(enemy);
+  }
+  for (const minion of state.minions) {
+    if (minion.hp > 0) candidates.push(minion);
+  }
+  if (state.boss && state.boss.hp > 0) candidates.push(state.boss);
+  if (candidates.length === 0) return null;
+
+  let nearest = candidates[0];
+  let best = Math.hypot(nearest.x - state.player.x, nearest.y - state.player.y);
+  for (let i = 1; i < candidates.length; i++) {
+    const c = candidates[i];
+    const d = Math.hypot(c.x - state.player.x, c.y - state.player.y);
+    if (d < best) {
+      best = d;
+      nearest = c;
+    }
+  }
+  return nearest;
+}
+
+function triggerSkill() {
+  if (!state.running || state.skillCooldown > 0) return;
+  const target = getClosestTarget();
+  if (!target) return;
+
+  for (let i = 0; i < 3; i++) {
+    const spread = (i - 1) * 6;
+    state.missiles.push({
+      x: state.player.x + state.player.size + 6,
+      y: state.player.y + spread,
+      vx: MISSILE_SPEED,
+      vy: 0,
+      size: 7,
+      target,
+      homing: 12,
+      wasHoming: true,
+    });
+  }
+  state.skillCooldown = SKILL_COOLDOWN;
 }
 
 function takePlayerDamage() {
@@ -527,6 +585,7 @@ function update(delta) {
   state.player.y = Math.max(state.player.size, Math.min(canvas.height - state.player.size, state.player.y));
 
   state.fireCooldown -= delta;
+  state.skillCooldown = Math.max(0, state.skillCooldown - delta);
   if (state.fireCooldown <= 0) {
     shoot();
     state.fireCooldown = 0.14;
@@ -541,6 +600,23 @@ function update(delta) {
   for (const bullet of state.bullets) {
     bullet.x += bullet.vx * delta;
     bullet.y += bullet.vy * delta;
+  }
+
+  for (const missile of state.missiles) {
+    if (missile.target && missile.target.hp > 0) {
+      const dx = missile.target.x - missile.x;
+      const dy = missile.target.y - missile.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const targetVx = (dx / len) * MISSILE_SPEED;
+      const targetVy = (dy / len) * MISSILE_SPEED;
+      missile.vx += (targetVx - missile.vx) * Math.min(1, missile.homing * delta);
+      missile.vy += (targetVy - missile.vy) * Math.min(1, missile.homing * delta);
+    } else if (missile.wasHoming) {
+      missile.target = null;
+      missile.wasHoming = false;
+    }
+    missile.x += missile.vx * delta;
+    missile.y += missile.vy * delta;
   }
 
   for (const enemy of state.enemies) {
@@ -622,6 +698,19 @@ function update(delta) {
   }
 
   for (const enemy of state.enemies) {
+    if (enemy.hp <= 0) continue;
+    for (const missile of state.missiles) {
+      const mx = enemy.x - missile.x;
+      const my = enemy.y - missile.y;
+      if (enemy.hp > 0 && Math.hypot(mx, my) < enemy.size + missile.size) {
+        enemy.hp -= 999;
+        missile.x = canvas.width + 999;
+        if (!enemy.isLarge) burstEnemy(enemy);
+        state.killsByPlayer += enemy.killValue;
+        state.score += 12 + enemy.maxHp * 2;
+      }
+    }
+
     const dx = enemy.x - state.player.x;
     const dy = enemy.y - state.player.y;
     if (Math.hypot(dx, dy) < enemy.size + state.player.size * 0.8) {
@@ -647,6 +736,15 @@ function update(delta) {
   }
 
   for (const minion of state.minions) {
+    if (minion.hp <= 0) continue;
+    for (const missile of state.missiles) {
+      if (minion.hp > 0 && Math.hypot(minion.x - missile.x, minion.y - missile.y) < minion.size + missile.size) {
+        minion.hp -= 999;
+        missile.x = canvas.width + 999;
+        state.score += 35;
+      }
+    }
+
     if (Math.hypot(minion.x - state.player.x, minion.y - state.player.y) < minion.size + state.player.size * 0.7) {
       takePlayerDamage();
     }
@@ -668,6 +766,13 @@ function update(delta) {
 
   const boss = state.boss;
   if (boss) {
+    for (const missile of state.missiles) {
+      if (boss.hp > 0 && Math.hypot(boss.x - missile.x, boss.y - missile.y) < boss.size + missile.size) {
+        boss.hp -= 18;
+        missile.x = canvas.width + 999;
+      }
+    }
+
     if (Math.hypot(boss.x - state.player.x, boss.y - state.player.y) < boss.size + state.player.size * 0.9) {
       takePlayerDamage();
     }
@@ -698,6 +803,9 @@ function update(delta) {
   }
 
   state.bullets = state.bullets.filter((b) => b.x < canvas.width + 50 && b.y > -50 && b.y < canvas.height + 50);
+  state.missiles = state.missiles.filter(
+    (m) => (m.target && m.target.hp > 0) || (m.x > -80 && m.x < canvas.width + 80 && m.y > -80 && m.y < canvas.height + 80),
+  );
   state.enemies = state.enemies.filter((e) => e.hp > 0);
   state.minions = state.minions.filter((m) => m.hp > 0);
   state.enemyBullets = state.enemyBullets.filter(
@@ -870,10 +978,32 @@ function render() {
   drawShip();
 
   for (const bullet of state.bullets) {
-    ctx.fillStyle = "#ffec7f";
+    const glow = ctx.createRadialGradient(bullet.x - 1, bullet.y, 1, bullet.x, bullet.y, bullet.size * 2.8);
+    glow.addColorStop(0, "rgba(255,255,255,0.95)");
+    glow.addColorStop(0.35, "rgba(173,242,255,0.95)");
+    glow.addColorStop(1, "rgba(40,180,255,0.05)");
+    ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
+    ctx.arc(bullet.x, bullet.y, bullet.size * 1.5, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  for (const missile of state.missiles) {
+    const angle = Math.atan2(missile.vy, missile.vx);
+    ctx.save();
+    ctx.translate(missile.x, missile.y);
+    ctx.rotate(angle);
+    ctx.fillStyle = "#ffd0ff";
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(-7, 5);
+    ctx.lineTo(-4, 0);
+    ctx.lineTo(-7, -5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#8cf5ff";
+    ctx.fillRect(-11, -2, 6, 4);
+    ctx.restore();
   }
 
   for (const enemy of state.enemies) {
@@ -892,12 +1022,25 @@ function render() {
   for (const minion of state.minions) drawMinion(minion);
 
   for (const bullet of state.enemyBullets) {
-    if (bullet.kind === "pulseCore") ctx.fillStyle = "#ff5ec9";
-    else if (bullet.kind === "delayedSeed") ctx.fillStyle = "#ffe24a";
-    else if (bullet.kind === "yellowHoming") ctx.fillStyle = "#ffd166";
-    else ctx.fillStyle = "#ff9a30";
+    let core = "#ff9a30";
+    let outer = "rgba(255, 120, 30, 0.05)";
+    if (bullet.kind === "pulseCore") {
+      core = "#ff5ec9";
+      outer = "rgba(255, 20, 170, 0.08)";
+    } else if (bullet.kind === "delayedSeed") {
+      core = "#ffe24a";
+      outer = "rgba(255, 228, 80, 0.08)";
+    } else if (bullet.kind === "yellowHoming") {
+      core = "#ffd166";
+      outer = "rgba(255, 190, 80, 0.08)";
+    }
+    const glow = ctx.createRadialGradient(bullet.x, bullet.y, 1, bullet.x, bullet.y, bullet.size * 2.6);
+    glow.addColorStop(0, "rgba(255,255,255,0.95)");
+    glow.addColorStop(0.45, core);
+    glow.addColorStop(1, outer);
+    ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
+    ctx.arc(bullet.x, bullet.y, bullet.size * 1.45, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -984,6 +1127,7 @@ window.addEventListener("keyup", (e) => {
 
 mobileModeButton.addEventListener("click", () => applyControlMode("mobile"));
 pcModeButton.addEventListener("click", () => applyControlMode("pc"));
+skillButton.addEventListener("click", triggerSkill);
 
 startButton.addEventListener("click", () => {
   if (!state.controlMode) {

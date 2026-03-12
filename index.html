@@ -14,9 +14,13 @@
       </header>
       <canvas id="game" width="900" height="600" aria-label="2D shooting game canvas"></canvas>
       <div class="lives" aria-label="残機"><span id="lives" class="lives-hearts">❤️❤️❤️❤️❤️</span></div>
-      <section class="controls" aria-label="Touch controls">
+      <section class="controls" aria-label="Game controls">
         <div id="stickArea" class="stick-area" role="presentation">
           <div id="stickKnob" class="stick-knob"></div>
+        </div>
+        <div class="skill-wrap">
+          <button id="skillButton" class="skill-button" aria-label="skill">SKILL</button>
+          <div id="skillCooldown" class="skill-cooldown">READY</div>
         </div>
       </section>
       <section id="overlay" class="overlay">
