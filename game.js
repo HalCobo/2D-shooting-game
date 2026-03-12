@@ -962,6 +962,9 @@ window.addEventListener("pointerup", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+    e.preventDefault();
+  }
   if (state.controlMode !== "pc") return;
   if (e.key === "ArrowLeft") state.keyboard.left = true;
   if (e.key === "ArrowRight") state.keyboard.right = true;
@@ -970,6 +973,9 @@ window.addEventListener("keydown", (e) => {
 });
 
 window.addEventListener("keyup", (e) => {
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+    e.preventDefault();
+  }
   if (e.key === "ArrowLeft") state.keyboard.left = false;
   if (e.key === "ArrowRight") state.keyboard.right = false;
   if (e.key === "ArrowUp") state.keyboard.up = false;
