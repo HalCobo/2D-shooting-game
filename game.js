@@ -38,6 +38,8 @@ const state = {
   minions: [],
   boss: null,
   emergencyTimer: 0,
+  clearTime: null,
+  clearSequenceTimer: null,
 };
 
 function resetGame() {
@@ -59,6 +61,11 @@ function resetGame() {
   state.minions = [];
   state.boss = null;
   state.emergencyTimer = 0;
+  state.clearTime = null;
+  if (state.clearSequenceTimer) {
+    clearTimeout(state.clearSequenceTimer);
+    state.clearSequenceTimer = null;
+  }
   state.player.x = canvas.width * 0.14;
   state.player.y = canvas.height * 0.5;
   startButton.textContent = "ゲーム開始";
@@ -100,7 +107,7 @@ function spawnEnemy() {
     killValue: isLarge ? 2 : 1,
     isLarge,
     entering: true,
-    entryDelay: 0.6 + Math.random() * 0.35,
+    entryDelay: 0.35 + Math.random() * 0.2,
   });
 }
 
@@ -560,6 +567,9 @@ function update(delta) {
       const targetVy = (dy / len) * speed;
       bullet.vx += (targetVx - bullet.vx) * Math.min(1, bullet.homing * delta);
       bullet.vy += (targetVy - bullet.vy) * Math.min(1, bullet.homing * delta);
+      if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+        bullet.x = -999;
+      }
     }
   }
 
@@ -624,9 +634,18 @@ function update(delta) {
           state.boss = null;
           state.minions = [];
           state.running = false;
+          state.clearTime = state.time;
           overlay.classList.remove("hidden");
           startButton.textContent = "もう一度";
-          overlay.querySelector("h1").textContent = "Boss撃破！";
+          overlay.querySelector("h1").textContent = "ボス撃破！";
+          if (state.clearSequenceTimer) clearTimeout(state.clearSequenceTimer);
+          state.clearSequenceTimer = setTimeout(() => {
+            overlay.querySelector("h1").textContent = "CLEAR";
+            const lines = overlay.querySelectorAll("p");
+            if (lines[0]) lines[0].textContent = `クリアタイム: ${state.clearTime.toFixed(1)} 秒`;
+            if (lines[1]) lines[1].textContent = "おめでとう！タップで再挑戦";
+            state.clearSequenceTimer = null;
+          }, 1600);
         }
       }
     }
@@ -732,10 +751,39 @@ function drawBoss(boss) {
 
 function drawMinion(minion) {
   const color = minion.type === "green" ? "#58e078" : minion.type === "orange" ? "#ff9a30" : "#ffd93a";
+  ctx.save();
+  ctx.translate(minion.x, minion.y);
   ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(minion.x, minion.y, minion.size, 0, Math.PI * 2);
-  ctx.fill();
+
+  if (minion.type === "green") {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 * i) / 6;
+      const r = i % 2 === 0 ? minion.size : minion.size * 0.55;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  } else if (minion.type === "orange") {
+    ctx.beginPath();
+    ctx.rect(-minion.size * 0.8, -minion.size * 0.8, minion.size * 1.6, minion.size * 1.6);
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    for (let i = 0; i < 3; i++) {
+      const a = -Math.PI / 2 + (Math.PI * 2 * i) / 3;
+      const px = Math.cos(a) * minion.size;
+      const py = Math.sin(a) * minion.size;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
 
   ctx.fillStyle = "rgba(255,255,255,0.25)";
   ctx.fillRect(minion.x - minion.size, minion.y + minion.size + 4, minion.size * 2, 3);
@@ -835,9 +883,12 @@ function resetJoystick() {
 }
 
 stickArea.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
   state.joystick.activeId = e.pointerId;
   setJoystick(e.clientX, e.clientY);
 });
+stickArea.addEventListener("contextmenu", (e) => e.preventDefault());
+stickArea.addEventListener("selectstart", (e) => e.preventDefault());
 
 window.addEventListener("pointermove", (e) => {
   if (state.joystick.activeId === e.pointerId) {

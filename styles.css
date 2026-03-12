@@ -10,6 +10,8 @@
   box-sizing: border-box;
   touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 body {
