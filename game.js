@@ -39,7 +39,7 @@ const state = {
   boss: null,
   emergencyTimer: 0,
   clearTime: null,
-  clearSequenceTimer: null,
+  defeatEmergencyTimer: 0,
 };
 
 function resetGame() {
@@ -62,10 +62,7 @@ function resetGame() {
   state.boss = null;
   state.emergencyTimer = 0;
   state.clearTime = null;
-  if (state.clearSequenceTimer) {
-    clearTimeout(state.clearSequenceTimer);
-    state.clearSequenceTimer = null;
-  }
+  state.defeatEmergencyTimer = 0;
   state.player.x = canvas.width * 0.14;
   state.player.y = canvas.height * 0.5;
   startButton.textContent = "ゲーム開始";
@@ -173,6 +170,25 @@ function shootEnemy(enemy) {
     vy: (dy / length) * speed,
     size: 5,
   });
+}
+
+function fireOrangeMinionBeam(minion) {
+  const dx = state.player.x - minion.x;
+  const dy = state.player.y - minion.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const dirX = dx / length;
+  const dirY = dy / length;
+  const speed = 520;
+  for (let i = 0; i < 8; i++) {
+    const offset = i * 18;
+    state.enemyBullets.push({
+      x: minion.x + dirX * offset,
+      y: minion.y + dirY * offset,
+      vx: dirX * speed,
+      vy: dirY * speed,
+      size: 5,
+    });
+  }
 }
 
 function burstEnemy(enemy) {
@@ -311,11 +327,8 @@ function chooseBossSpecial() {
   const summonCandidates = ["green", "orange", "yellow"].filter((c) => !aliveColors.has(c));
   const summonAvailable = summonCandidates.length > 0;
 
-  let special = null;
-  const roll = Math.random();
-  if (summonAvailable && roll < 0.2) special = "summon";
-  else if (roll < (summonAvailable ? 0.6 : 0.5)) special = "beam";
-  else special = "pulse";
+  const options = summonAvailable ? ["beam", "pulse", "summon"] : ["beam", "pulse"];
+  const special = options[Math.floor(Math.random() * options.length)];
 
   if (special === "summon") {
     const chosenColor = summonCandidates[Math.floor(Math.random() * summonCandidates.length)];
@@ -430,14 +443,8 @@ function updateMinions(delta) {
     }
 
     if (minion.type === "orange" && minion.cooldown <= 0) {
-      state.enemyBullets.push({
-        x: minion.x,
-        y: minion.y,
-        vx: -440,
-        vy: 0,
-        size: 5,
-      });
-      minion.cooldown = 1.25;
+      fireOrangeMinionBeam(minion);
+      minion.cooldown = 1.55;
     }
 
     if (minion.type === "yellow" && minion.cooldown <= 0) {
@@ -456,7 +463,20 @@ function updateMinions(delta) {
 }
 
 function update(delta) {
-  if (!state.running) return;
+  if (!state.running) {
+    if (state.defeatEmergencyTimer > 0) {
+      state.defeatEmergencyTimer = Math.max(0, state.defeatEmergencyTimer - delta);
+      if (state.defeatEmergencyTimer <= 0 && state.bossDefeated) {
+        overlay.classList.remove("hidden");
+        startButton.textContent = "もう一度";
+        overlay.querySelector("h1").textContent = "CLEAR";
+        const lines = overlay.querySelectorAll("p");
+        if (lines[0]) lines[0].textContent = `クリアタイム: ${state.clearTime.toFixed(1)} 秒`;
+        if (lines[1]) lines[1].textContent = "おめでとう！タップで再挑戦";
+      }
+    }
+    return;
+  }
 
   state.time += delta;
   state.level = 1 + Math.floor(state.time / 20);
@@ -500,11 +520,6 @@ function update(delta) {
         enemy.x = enemy.centerX;
         enemy.entering = false;
       }
-      continue;
-    }
-
-    if (enemy.entryDelay > 0) {
-      enemy.entryDelay -= delta;
       continue;
     }
 
@@ -635,17 +650,8 @@ function update(delta) {
           state.minions = [];
           state.running = false;
           state.clearTime = state.time;
-          overlay.classList.remove("hidden");
-          startButton.textContent = "もう一度";
-          overlay.querySelector("h1").textContent = "ボス撃破！";
-          if (state.clearSequenceTimer) clearTimeout(state.clearSequenceTimer);
-          state.clearSequenceTimer = setTimeout(() => {
-            overlay.querySelector("h1").textContent = "CLEAR";
-            const lines = overlay.querySelectorAll("p");
-            if (lines[0]) lines[0].textContent = `クリアタイム: ${state.clearTime.toFixed(1)} 秒`;
-            if (lines[1]) lines[1].textContent = "おめでとう！タップで再挑戦";
-            state.clearSequenceTimer = null;
-          }, 1600);
+          state.defeatEmergencyTimer = 2.0;
+          overlay.classList.add("hidden");
         }
       }
     }
@@ -808,6 +814,23 @@ function drawEmergencyBanner() {
   ctx.restore();
 }
 
+function drawDefeatBanner() {
+  const t = state.defeatEmergencyTimer;
+  if (t <= 0) return;
+  const blink = Math.floor(t * 10) % 2 === 0;
+  ctx.save();
+  ctx.fillStyle = blink ? "rgba(255,220,40,0.85)" : "rgba(180,120,0,0.85)";
+  ctx.fillRect(0, canvas.height * 0.42, canvas.width, 64);
+  ctx.strokeStyle = "rgba(255,255,255,0.95)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(8, canvas.height * 0.42 + 6, canvas.width - 16, 52);
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 34px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("★ ボス撃破！ ★", canvas.width / 2, canvas.height * 0.42 + 43);
+  ctx.restore();
+}
+
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawStarField();
@@ -846,6 +869,7 @@ function render() {
   }
 
   drawEmergencyBanner();
+  drawDefeatBanner();
 }
 
 function gameLoop(timestamp) {
