@@ -18,6 +18,9 @@ const BOSS_TRIGGER_KILLS = 28;
 const MAX_HP = 5;
 const SKILL_COOLDOWN = 8;
 const MISSILE_SPEED = 320;
+const MISSILE_DAMAGE_ENEMY = 4;
+const MISSILE_DAMAGE_MINION = 7;
+const MISSILE_DAMAGE_BOSS = 12;
 
 const state = {
   running: false,
@@ -700,7 +703,7 @@ function update(delta) {
       const mx = enemy.x - missile.x;
       const my = enemy.y - missile.y;
       if (enemy.hp > 0 && Math.hypot(mx, my) < enemy.size + missile.size) {
-        enemy.hp -= 999;
+        enemy.hp -= MISSILE_DAMAGE_ENEMY;
         missile.x = canvas.width + 999;
         if (!enemy.isLarge) burstEnemy(enemy);
         state.killsByPlayer += enemy.killValue;
@@ -736,7 +739,7 @@ function update(delta) {
     if (minion.hp <= 0) continue;
     for (const missile of state.missiles) {
       if (minion.hp > 0 && Math.hypot(minion.x - missile.x, minion.y - missile.y) < minion.size + missile.size) {
-        minion.hp -= 999;
+        minion.hp -= MISSILE_DAMAGE_MINION;
         missile.x = canvas.width + 999;
         state.score += 35;
       }
@@ -765,7 +768,7 @@ function update(delta) {
   if (boss) {
     for (const missile of state.missiles) {
       if (boss.hp > 0 && Math.hypot(boss.x - missile.x, boss.y - missile.y) < boss.size + missile.size) {
-        boss.hp -= 18;
+        boss.hp -= MISSILE_DAMAGE_BOSS;
         missile.x = canvas.width + 999;
       }
     }
